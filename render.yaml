@@ -14,11 +14,10 @@ services:
       - key: GROQ_API_KEY
         sync: false
 
-  # React Static Site Frontend (Free Tier)
+  # React Static Site Frontend
   - type: web
     name: doomverse-frontend
     env: static
-    plan: free
     buildCommand: npm run build
     staticPublishPath: ./build
     envVars:
