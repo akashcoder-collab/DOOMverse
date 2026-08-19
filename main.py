@@ -12,8 +12,13 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 
-TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID")
-TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH")
+raw_api_id = os.environ.get("TELEGRAM_API_ID", "30656375")
+try:
+    TELEGRAM_API_ID = int(str(raw_api_id).strip())
+except Exception:
+    TELEGRAM_API_ID = 30656375
+
+TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "ae2a595d3188c7a52dbea0ed6fc0e06a")
 TELEGRAM_SESSION_STRING = os.environ.get("TELEGRAM_SESSION_STRING")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
@@ -21,8 +26,20 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 def get_telegram_client():
     if TELEGRAM_SESSION_STRING:
-        return TelegramClient(StringSession(TELEGRAM_SESSION_STRING), TELEGRAM_API_ID, TELEGRAM_API_HASH)
+        return TelegramClient(StringSession(TELEGRAM_SESSION_STRING.strip()), TELEGRAM_API_ID, TELEGRAM_API_HASH)
     return TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH)
+
+def run_async(coro):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        try:
+            loop.close()
+        except Exception:
+            pass
+
 
 
 app = Flask(__name__)
@@ -99,7 +116,7 @@ def fetch_user_vlogs():
     if not email:
         return jsonify({"message": "Email is required."}), 400
     try:
-        vlogs = asyncio.run(get_user_vlogs(email))
+        vlogs = run_async(get_user_vlogs(email))
         return jsonify({"vlogs": vlogs}), 200
     except Exception as e:
         return jsonify({"message": "Failed to fetch user vlogs", "error": str(e)}), 500
@@ -158,7 +175,7 @@ def save_chat():
         return jsonify({"message": "Missing required fields."}), 400
 
     try:
-        asyncio.run(save_chat_to_telegram(email, vlog_id, user_msg, ai_reply))
+        run_async(save_chat_to_telegram(email, vlog_id, user_msg, ai_reply))
         return jsonify({"message": "Chat saved to Telegram."}), 200
     except Exception as e:
         print("Save chat error:", e)
@@ -174,7 +191,7 @@ def load_chat():
         return jsonify({"message": "email and vlogId are required."}), 400
 
     try:
-        history = asyncio.run(load_chat_from_telegram(email, vlog_id))
+        history = run_async(load_chat_from_telegram(email, vlog_id))
         return jsonify({"history": history}), 200
     except Exception as e:
         print("Load chat error:", e)
@@ -210,7 +227,7 @@ def edit_vlog():
         return jsonify({"message": "Missing required fields."}), 400
 
     try:
-        result = asyncio.run(edit_vlog_in_telegram(int(msg_id), title, video_url, description, author))
+        result = run_async(edit_vlog_in_telegram(int(msg_id), title, video_url, description, author))
         if result:
             return jsonify({"message": "Vlog updated successfully."}), 200
         else:
@@ -270,7 +287,7 @@ def fetch_profile():
     if not email:
         return jsonify({"message": "Email is required."}), 400
     try:
-        profile = asyncio.run(get_profile_from_telegram(email))
+        profile = run_async(get_profile_from_telegram(email))
         if not profile:
             username = email.split("@")[0]
             profile = {
@@ -298,7 +315,7 @@ def save_profile():
         return jsonify({"message": "Email is required."}), 400
 
     try:
-        asyncio.run(save_profile_to_telegram(email, full_name, university, hobbies, bio))
+        run_async(save_profile_to_telegram(email, full_name, university, hobbies, bio))
         return jsonify({"message": "Profile saved successfully."}), 200
     except Exception as e:
         print("Save profile error:", e)
@@ -354,7 +371,7 @@ def fetch_activity():
     if not email:
         return jsonify({"message": "Email is required."}), 400
     try:
-        activity = asyncio.run(get_activity_from_telegram(email))
+        activity = run_async(get_activity_from_telegram(email))
         return jsonify({"activity": activity}), 200
     except Exception as e:
         print("Fetch activity error:", e)
@@ -370,7 +387,7 @@ def save_activity():
         return jsonify({"message": "Email is required."}), 400
 
     try:
-        asyncio.run(save_activity_to_telegram(email, int(seconds_spent)))
+        run_async(save_activity_to_telegram(email, int(seconds_spent)))
         return jsonify({"message": "Activity updated."}), 200
     except Exception as e:
         print("Save activity error:", e)
@@ -441,7 +458,7 @@ def fetch_admin_users():
         return jsonify({"message": "Access denied. Admin authorization required."}), 403
 
     try:
-        users = asyncio.run(get_all_users_from_telegram())
+        users = run_async(get_all_users_from_telegram())
         return jsonify({"users": users}), 200
     except Exception as e:
         print("Fetch admin users error:", e)
@@ -539,7 +556,7 @@ def login():
 
     try:
 
-        result = asyncio.run(
+        result = run_async(
             telegram_login(email, password)
         )
 
@@ -609,7 +626,7 @@ async def add_telegram_vlog(title, video_url, description, author):
 @app.route("/vlogs", methods=["GET"])
 def fetch_vlogs():
     try:
-        vlogs = asyncio.run(get_telegram_vlogs())
+        vlogs = run_async(get_telegram_vlogs())
         return jsonify({"vlogs": vlogs}), 200
     except Exception as e:
         return jsonify({"message": "Failed to fetch vlogs", "error": str(e)}), 500
@@ -626,7 +643,7 @@ def post_vlog():
         return jsonify({"message": "Title and Video URL are required."}), 400
 
     try:
-        success = asyncio.run(add_telegram_vlog(title, video_url, description, author))
+        success = run_async(add_telegram_vlog(title, video_url, description, author))
         if success:
             return jsonify({"message": "Vlog posted to Telegram successfully!"}), 201
         return jsonify({"message": "Database chat not found."}), 404
