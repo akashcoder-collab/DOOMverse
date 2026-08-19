@@ -10,10 +10,13 @@ services:
         sync: false
       - key: TELEGRAM_API_HASH
         sync: false
+      - key: GROQ_API_KEY
+        sync: false
 
   # React Static Site Frontend
-  - type: static
+  - type: web
     name: doomverse-frontend
+    env: static
     buildCommand: npm run build
     staticPublishPath: ./build
     envVars:
@@ -22,3 +25,4 @@ services:
           type: web
           name: doomverse-backend
           property: url
+
