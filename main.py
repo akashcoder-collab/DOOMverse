@@ -1,9 +1,9 @@
 from groq import Groq
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from dotenv import load_dotenv
 
 load_dotenv()
-print(load_dotenv())
 
 import os
 import asyncio
@@ -14,9 +14,16 @@ from flask_cors import CORS
 
 TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH")
+TELEGRAM_SESSION_STRING = os.environ.get("TELEGRAM_SESSION_STRING")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
+
+def get_telegram_client():
+    if TELEGRAM_SESSION_STRING:
+        return TelegramClient(StringSession(TELEGRAM_SESSION_STRING), TELEGRAM_API_ID, TELEGRAM_API_HASH)
+    return TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH)
+
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -63,7 +70,7 @@ def chat():
 
 
 async def get_user_vlogs(author_email):
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         vlogs = []
         for dialog in dialogs:
@@ -101,7 +108,7 @@ def fetch_user_vlogs():
 # ─── Chat History via Telegram ───────────────────────────────────────────────
 
 async def save_chat_to_telegram(email, vlog_id, user_msg, ai_reply):
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         for dialog in dialogs:
             if dialog.name == "AI":
@@ -116,7 +123,7 @@ async def save_chat_to_telegram(email, vlog_id, user_msg, ai_reply):
 
 
 async def load_chat_from_telegram(email, vlog_id):
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         history = []
         for dialog in dialogs:
@@ -177,7 +184,7 @@ def load_chat():
 # ─── Edit Vlog in Telegram ───────────────────────────────────────────────────
 
 async def edit_vlog_in_telegram(message_id, title, video_url, description, author):
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         for dialog in dialogs:
             if dialog.name == "Database":
@@ -216,7 +223,7 @@ def edit_vlog():
 # ─── User Profile via Telegram ───────────────────────────────────────────────
 
 async def get_profile_from_telegram(email):
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         for dialog in dialogs:
             if dialog.name == "Database":
@@ -236,7 +243,7 @@ async def get_profile_from_telegram(email):
         return None
 
 async def save_profile_to_telegram(email, full_name, university, hobbies, bio):
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         for dialog in dialogs:
             if dialog.name == "Database":
@@ -301,7 +308,7 @@ def save_profile():
 # ─── User Activity Tracking via Telegram ─────────────────────────────────────
 
 async def get_activity_from_telegram(email):
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         today_date = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
         for dialog in dialogs:
@@ -323,7 +330,7 @@ async def get_activity_from_telegram(email):
         return {"email": email, "secondsSpent": 0, "lastDate": today_date, "isToday": True}
 
 async def save_activity_to_telegram(email, seconds_spent):
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         today_date = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
         for dialog in dialogs:
@@ -375,7 +382,7 @@ def save_activity():
 ADMIN_EMAILS = ["anz026771@gmail.com"]
 
 async def get_all_users_from_telegram():
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         today_date = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
         users_map = {}
@@ -450,11 +457,7 @@ def health_check():
 
 async def telegram_login(email, password):
 
-    async with TelegramClient(
-        "session_name",
-        TELEGRAM_API_ID,
-        TELEGRAM_API_HASH
-    ) as client:
+    async with get_telegram_client() as client:
 
         print("Telegram connected")
 
@@ -571,7 +574,7 @@ import json
 
 # --- TELEGRAM VLOG FUNCTIONS ---
 async def get_telegram_vlogs():
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         vlogs = []
 
@@ -593,7 +596,7 @@ async def get_telegram_vlogs():
         return []
 
 async def add_telegram_vlog(title, video_url, description, author):
-    async with TelegramClient("session_name", TELEGRAM_API_ID, TELEGRAM_API_HASH) as client:
+    async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         for dialog in dialogs:
             if dialog.name == "Database":
