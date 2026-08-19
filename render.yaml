@@ -22,7 +22,4 @@ services:
     staticPublishPath: ./build
     envVars:
       - key: REACT_APP_API_URL
-        fromService:
-          type: web
-          name: doomverse-backend
-          property: host
+        value: https://doomverse-backend.onrender.com
