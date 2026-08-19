@@ -13,10 +13,9 @@ services:
       - key: GROQ_API_KEY
         sync: false
 
-  # React Static Site Frontend
-  - type: web
+  # React Static Site Frontend (100% Free, No Credit Card Required)
+  - type: static_site
     name: doomverse-frontend
-    env: static
     buildCommand: npm run build
     staticPublishPath: ./build
     envVars:
