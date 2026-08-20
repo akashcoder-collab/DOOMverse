@@ -22,7 +22,15 @@ TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "ae2a595d3188c7a52dbea0e
 TELEGRAM_SESSION_STRING = os.environ.get("TELEGRAM_SESSION_STRING")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-groq_client = Groq(api_key=GROQ_API_KEY)
+_groq_client = None
+
+def get_groq_client():
+    """Lazy-init Groq client so it always picks up the current env var."""
+    global _groq_client
+    key = os.environ.get("GROQ_API_KEY", GROQ_API_KEY)
+    if _groq_client is None and key:
+        _groq_client = Groq(api_key=key)
+    return _groq_client
 
 def get_telegram_client():
     if TELEGRAM_SESSION_STRING:
@@ -56,7 +64,11 @@ def chat():
         return jsonify({"reply": "Please send a message."}), 400
 
     try:
-        response = groq_client.chat.completions.create(
+        client = get_groq_client()
+        if not client:
+            return jsonify({"reply": "AI is not configured. GROQ_API_KEY is missing."}), 500
+
+        response = client.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
                 {
@@ -82,8 +94,21 @@ def chat():
         return jsonify({"reply": reply}), 200
 
     except Exception as e:
-        print("Groq error:", e)
+        print(f"Groq error [{type(e).__name__}]: {e}")
         return jsonify({"reply": "AI is unavailable right now. Please try again."}), 500
+
+
+@app.route("/debug", methods=["GET"])
+def debug_env():
+    """Temporary endpoint to verify environment variables are loaded on Render."""
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    return jsonify({
+        "groq_key_set": bool(groq_key),
+        "groq_key_prefix": groq_key[:8] + "..." if len(groq_key) > 8 else "MISSING",
+        "telegram_api_id": TELEGRAM_API_ID,
+        "telegram_hash_set": bool(TELEGRAM_API_HASH),
+        "session_string_set": bool(TELEGRAM_SESSION_STRING),
+    })
 
 
 async def get_user_vlogs(author_email):
