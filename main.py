@@ -47,8 +47,9 @@ def groq_chat(model, messages, max_tokens=512, temperature=0.7):
     resp.raise_for_status()
     data = resp.json()
     reply = data["choices"][0]["message"]["content"]
-    # Clean up any thinking tags from model output
+    # Clean up any thinking tags from model output (closed and unclosed)
     reply = re.sub(r'<think>.*?</think>', '', reply, flags=re.DOTALL).strip()
+    reply = re.sub(r'<think>.*$', '', reply, flags=re.DOTALL).strip()
     return reply, None
 
 def get_telegram_client():
@@ -73,8 +74,8 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 
-# Models to try in order of preference
-GROQ_MODELS = ["openai/gpt-oss-20b", "qwen/qwen3.6-27b", "openai/gpt-oss-safeguard-20b"]
+# Models to try in order of preference (qwen first — openai models tend to use all tokens on thinking)
+GROQ_MODELS = ["qwen/qwen3.6-27b", "openai/gpt-oss-20b", "openai/gpt-oss-safeguard-20b"]
 
 
 @app.route("/chat", methods=["POST"])
@@ -137,7 +138,7 @@ def test_ai():
     results = {}
     for model in GROQ_MODELS:
         try:
-            reply, err = groq_chat(model, [{"role": "user", "content": "Say hi in one word"}], max_tokens=10, temperature=0)
+            reply, err = groq_chat(model, [{"role": "user", "content": "Say hi in one word. Do not use think tags."}], max_tokens=100, temperature=0)
             if err:
                 raise Exception(err)
             results[model] = {"status": "ok", "reply": reply}
