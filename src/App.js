@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import Signin from "./signin/signin";
-import Dashboard from "./dashboard/Dashboard";
 import Navbar from "./navbar/Navbar";
 import bgImage from "./assests/website.jpg";
 import VlogFeed from "./vlogs/VlogFeed";
 import WatchPage from "./watch/WatchPage";
 import AIChannel from "./channel/AIChannel";
 import AdminDashboard from "./admin/AdminDashboard";
+import MoviesTab from "./movies/MoviesTab";
 
 
 function App() {
@@ -150,12 +150,16 @@ function Homepage({ user, onLogout }) {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
-      <VlogFeed
-        user={user}
-        activeTab={activeTab}
-        onWatch={setSelectedVlog}
-        onChannelOpen={setSelectedChannel}
-      />
+      {activeTab === "movies" ? (
+        <MoviesTab />
+      ) : (
+        <VlogFeed
+          user={user}
+          activeTab={activeTab}
+          onWatch={setSelectedVlog}
+          onChannelOpen={setSelectedChannel}
+        />
+      )}
     </div>
   );
 }

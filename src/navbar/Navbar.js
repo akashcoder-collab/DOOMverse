@@ -53,6 +53,22 @@ export default function Navbar({ user, onLogout, activeTab, setActiveTab }) {
           </span>
 
           <span
+            onClick={() => setActiveTab("movies")}
+            style={{
+              cursor: "pointer",
+              fontWeight: activeTab === "movies" ? "700" : "500",
+              color: activeTab === "movies" ? "#ffffff" : "rgba(255,255,255,0.5)",
+              textDecoration: "none",
+              borderBottom: activeTab === "movies" ? "2px solid #ec4899" : "2px solid transparent",
+              paddingBottom: "4px",
+              transition: "color 0.2s ease",
+              fontSize: "0.95rem",
+            }}
+          >
+            🎬 Movies
+          </span>
+
+          <span
             onClick={() => setActiveTab("ai-channel")}
             style={{
               cursor: "pointer",

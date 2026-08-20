@@ -15,6 +15,8 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: TMDB_API_KEY
+        sync: false
 
   # React Static Site Frontend
   - type: web
