@@ -1128,6 +1128,14 @@ CURATED_MOVIES = [
 ]
 
 
+TMDB_GENRE_MAP = {
+    28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy",
+    80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family",
+    14: "Fantasy", 36: "History", 27: "Horror", 10402: "Music",
+    9648: "Mystery", 10749: "Romance", 878: "Sci-Fi", 10770: "TV Movie",
+    53: "Thriller", 10752: "War", 37: "Western"
+}
+
 def fetch_tmdb_movies(search_query="", genre=""):
     """Fetch live movies from TMDB API if key is available, else return filtered curated list."""
     api_key = (os.environ.get("TMDB_API_KEY") or TMDB_API_KEY).strip()
@@ -1139,16 +1147,27 @@ def fetch_tmdb_movies(search_query="", genre=""):
             else:
                 url = f"https://api.themoviedb.org/3/trending/movie/week?api_key={api_key}&language=en-US"
             
-            resp = http_requests.get(url, timeout=6)
+            resp = http_requests.get(url, timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
                 results = data.get("results", [])
                 formatted = []
-                for m in results[:15]:
-                    poster = f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}" if m.get('poster_path') else "https://via.placeholder.com/500x750?text=No+Poster"
+                for m in results[:20]:
+                    poster = f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}" if m.get('poster_path') else "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=80"
                     backdrop = f"https://image.tmdb.org/t/p/original{m.get('backdrop_path')}" if m.get('backdrop_path') else poster
                     release = m.get("release_date", "")
-                    year = release.split("-")[0] if release else "N/A"
+                    year = release.split("-")[0] if release else "2024"
+                    
+                    # Map genre IDs
+                    genres_list = [TMDB_GENRE_MAP.get(gid) for gid in m.get("genre_ids", []) if TMDB_GENRE_MAP.get(gid)]
+                    if not genres_list:
+                        genres_list = ["Trending"]
+
+                    # If genre filter active, check match
+                    if genre and genre.lower() != "all":
+                        if not any(genre.lower() in g.lower() for g in genres_list):
+                            continue
+
                     formatted.append({
                         "id": m.get("id"),
                         "title": m.get("title") or m.get("original_title"),
@@ -1158,12 +1177,12 @@ def fetch_tmdb_movies(search_query="", genre=""):
                         "rating": round(m.get("vote_average", 0), 1),
                         "voteCount": m.get("vote_count", 0),
                         "runtime": "N/A",
-                        "genres": ["Trending"],
+                        "genres": genres_list,
                         "director": "Various",
                         "posterUrl": poster,
                         "backdropUrl": backdrop,
-                        "trailerUrl": f"https://www.youtube.com/results?search_query={http_requests.utils.quote(m.get('title', '') + ' official trailer')}",
-                        "overview": m.get("overview", "No description available."),
+                        "trailerUrl": f"https://www.youtube.com/results?search_query={http_requests.utils.quote((m.get('title') or '') + ' official trailer')}",
+                        "overview": m.get("overview") or "No synopsis available.",
                         "cast": []
                     })
                 if formatted:
