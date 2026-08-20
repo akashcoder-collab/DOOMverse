@@ -2,15 +2,18 @@ import React, { useState, useRef, useEffect } from "react";
 import { API_BASE_URL } from "../config";
 
 export default function WatchPage({ vlog, user, onBack }) {
+  const hasVideo = Boolean(vlog?.videoUrl && vlog.videoUrl.trim());
+  const hasImage = Boolean(vlog?.imageUrl && vlog.imageUrl.trim());
+  const authorName = vlog?.author ? vlog.author.split("@")[0] : "Creator";
+
   const greeting = {
     role: "assistant",
-    text: `Hi! I'm your AI assistant. You're watching "${vlog.title}" by ${vlog.author.split("@")[0]}. Ask me anything about the video topic!`,
+    text: `Hi! I'm your AI assistant. You're viewing "${vlog?.title || "Vlog"}" by ${authorName}. Ask me anything about this ${hasVideo ? "video" : hasImage ? "image post" : "idea"}!`,
   };
 
   const [messages, setMessages] = useState([greeting]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const chatEndRef = useRef(null);
 
   // Auto-scroll to latest message
@@ -37,15 +40,15 @@ export default function WatchPage({ vlog, user, onBack }) {
         }
       } catch (err) {
         console.warn("Could not load chat history:", err);
-      } finally {
-        setHistoryLoaded(true);
       }
     };
     loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vlog.id, user?.email]);
 
   // Get YouTube embed URL
   const getEmbedUrl = (url) => {
+    if (!url) return "";
     const params = "?rel=0&modestbranding=1&playsinline=1";
     try {
       if (url.includes("youtu.be/")) {
@@ -67,6 +70,20 @@ export default function WatchPage({ vlog, user, onBack }) {
     }
   };
 
+  // Get resolved image URL
+  const getImageUrl = (url) => {
+    if (!url) return "";
+    if (
+      url.startsWith("http://") ||
+      url.startsWith("https://") ||
+      url.startsWith("data:") ||
+      url.startsWith("blob:")
+    ) {
+      return url;
+    }
+    return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+  };
+
   // Send message to Groq via Flask /chat + save to Telegram
   const sendMessage = async () => {
     const trimmed = input.trim();
@@ -83,7 +100,7 @@ export default function WatchPage({ vlog, user, onBack }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: trimmed,
-          context: `The user is watching a vlog titled "${vlog.title}" described as: "${vlog.description}". Posted by ${vlog.author}.`,
+          context: `The user is viewing a ${hasVideo ? "video vlog" : hasImage ? "photo/image vlog" : "idea post"} titled "${vlog.title}" described as: "${vlog.description || ""}". Posted by ${vlog.author}.`,
         }),
       });
 
@@ -160,12 +177,12 @@ export default function WatchPage({ vlog, user, onBack }) {
         <div>
           <h5 className="mb-0 fw-bold" style={{ color: "#fff" }}>{vlog.title}</h5>
           <small style={{ color: "rgba(255,255,255,0.5)" }}>
-            by {vlog.author.split("@")[0]} · {vlog.date}
+            by {authorName} · {vlog.date}
           </small>
         </div>
       </div>
 
-      {/* Main Content: Video Left + Chat Right */}
+      {/* Main Content: Media Left + Chat Right */}
       <div
         className="watch-split-container"
         style={{
@@ -175,24 +192,138 @@ export default function WatchPage({ vlog, user, onBack }) {
           overflow: "hidden",
         }}
       >
-        {/* Left: Video Player */}
+        {/* Left: Video / Image / Idea Presentation */}
         <div
           className="watch-split-left"
           style={{
             flex: "0 0 65%",
-            backgroundColor: "#000",
+            backgroundColor: "#050811",
             display: "flex",
             flexDirection: "column",
+            overflowY: "auto",
+            position: "relative",
           }}
         >
-          <iframe
-            src={getEmbedUrl(vlog.videoUrl)}
-            title={vlog.title}
-            style={{ width: "100%", height: "100%", border: "none" }}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-            playsInline
-          ></iframe>
+          {hasVideo ? (
+            /* Video player */
+            <div style={{ width: "100%", height: "100%", minHeight: "450px" }}>
+              <iframe
+                src={getEmbedUrl(vlog.videoUrl)}
+                title={vlog.title}
+                style={{ width: "100%", height: "100%", border: "none" }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                playsInline
+              ></iframe>
+            </div>
+          ) : hasImage ? (
+            /* Image showcase view */
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "32px",
+                backgroundColor: "#080c16",
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: "90%",
+                  maxHeight: "68vh",
+                  borderRadius: "16px",
+                  overflow: "hidden",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  backgroundColor: "#000",
+                }}
+              >
+                <img
+                  src={getImageUrl(vlog.imageUrl)}
+                  alt={vlog.title}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    maxHeight: "68vh",
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                />
+              </div>
+
+              {/* Title & Description Below Image */}
+              <div
+                style={{
+                  marginTop: "20px",
+                  maxWidth: "90%",
+                  textAlign: "center",
+                  padding: "16px 24px",
+                  backgroundColor: "rgba(15, 23, 42, 0.7)",
+                  backdropFilter: "blur(10px)",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                }}
+              >
+                <h4 className="fw-bold text-white mb-2">{vlog.title}</h4>
+                <p className="text-light-50 mb-0" style={{ fontSize: "0.95rem" }}>
+                  {vlog.description || "No description provided."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            /* Idea / Text note view */
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "40px",
+                background: "linear-gradient(135deg, #090e1d, #111a33)",
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: "680px",
+                  width: "100%",
+                  backgroundColor: "rgba(15, 23, 42, 0.8)",
+                  backdropFilter: "blur(14px)",
+                  borderRadius: "20px",
+                  padding: "36px",
+                  border: "1px solid rgba(168, 85, 247, 0.3)",
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+                }}
+              >
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <span className="badge bg-purple px-3 py-2" style={{ backgroundColor: "#8b5cf6", fontSize: "0.85rem" }}>
+                    💡 Community Idea / Post
+                  </span>
+                  <small style={{ color: "rgba(255,255,255,0.5)" }}>{vlog.date}</small>
+                </div>
+                <h2 className="fw-bold text-white mb-3">{vlog.title}</h2>
+                <p
+                  style={{
+                    color: "rgba(255,255,255,0.85)",
+                    fontSize: "1.05rem",
+                    lineHeight: "1.7",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {vlog.description || "No description provided for this idea."}
+                </p>
+                <hr style={{ borderColor: "rgba(255,255,255,0.15)", margin: "24px 0 16px 0" }} />
+                <div className="d-flex align-items-center justify-content-between">
+                  <small style={{ color: "#38bdf8" }}>Posted by {authorName}</small>
+                  <small style={{ color: "rgba(255,255,255,0.4)" }}>Ask the AI assistant on the right 💬</small>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right: AI Chatbot */}

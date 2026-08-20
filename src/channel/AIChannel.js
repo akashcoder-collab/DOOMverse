@@ -275,34 +275,136 @@ export default function AIChannel({ creatorEmail, currentUser, onBack }) {
               No vlogs posted yet.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {vlogs.map((vlog) => (
-                <div
-                  key={vlog.id}
-                  style={{
-                    padding: "14px",
-                    borderRadius: "12px",
-                    backgroundColor: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  <div style={{ fontWeight: "600", fontSize: "0.9rem", marginBottom: "4px" }}>
-                    {vlog.title}
-                  </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {vlogs.map((vlog) => {
+                const cover = (() => {
+                  if (vlog.imageUrl) {
+                    if (
+                      vlog.imageUrl.startsWith("http://") ||
+                      vlog.imageUrl.startsWith("https://") ||
+                      vlog.imageUrl.startsWith("data:") ||
+                      vlog.imageUrl.startsWith("blob:")
+                    ) {
+                      return vlog.imageUrl;
+                    }
+                    return `${API_BASE_URL}${vlog.imageUrl.startsWith("/") ? "" : "/"}${vlog.imageUrl}`;
+                  }
+                  if (vlog.videoUrl) {
+                    if (vlog.videoUrl.includes("youtu.be/")) {
+                      const id = vlog.videoUrl.split("youtu.be/")[1].split("?")[0];
+                      return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+                    }
+                    if (vlog.videoUrl.includes("youtube.com/watch")) {
+                      try {
+                        const urlObj = new URL(vlog.videoUrl);
+                        const id = urlObj.searchParams.get("v");
+                        if (id) return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+                      } catch {}
+                    }
+                  }
+                  return null;
+                })();
+
+                const hasVideo = Boolean(vlog.videoUrl && vlog.videoUrl.trim());
+                const hasImage = Boolean(vlog.imageUrl && vlog.imageUrl.trim());
+
+                return (
                   <div
+                    key={vlog.id}
                     style={{
-                      fontSize: "0.78rem",
-                      color: "rgba(255,255,255,0.5)",
-                      marginBottom: "6px",
+                      padding: "12px",
+                      borderRadius: "12px",
+                      backgroundColor: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      display: "flex",
+                      gap: "12px",
+                      alignItems: "flex-start",
                     }}
                   >
-                    {vlog.description}
+                    {cover ? (
+                      <div
+                        style={{
+                          width: "70px",
+                          height: "54px",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          flexShrink: 0,
+                          backgroundColor: "#000",
+                        }}
+                      >
+                        <img
+                          src={cover}
+                          alt={vlog.title}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          width: "70px",
+                          height: "54px",
+                          borderRadius: "8px",
+                          flexShrink: 0,
+                          background: "linear-gradient(135deg, rgba(79,70,229,0.3), rgba(236,72,153,0.3))",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "1.2rem",
+                        }}
+                      >
+                        💡
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="d-flex align-items-center justify-content-between gap-1 mb-1">
+                        <div
+                          style={{
+                            fontWeight: "600",
+                            fontSize: "0.88rem",
+                            color: "#fff",
+                          }}
+                          className="text-truncate"
+                        >
+                          {vlog.title}
+                        </div>
+                        <span
+                          style={{
+                            fontSize: "0.65rem",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            backgroundColor: hasVideo
+                              ? "rgba(239, 68, 68, 0.2)"
+                              : hasImage
+                              ? "rgba(56, 189, 248, 0.2)"
+                              : "rgba(168, 85, 247, 0.2)",
+                            color: hasVideo ? "#f87171" : hasImage ? "#38bdf8" : "#c084fc",
+                            fontWeight: "600",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {hasVideo ? "Video" : hasImage ? "Photo" : "Idea"}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.76rem",
+                          color: "rgba(255,255,255,0.5)",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        {vlog.description || "No description."}
+                      </div>
+                      <small style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.7rem" }}>
+                        {vlog.date}
+                      </small>
+                    </div>
                   </div>
-                  <small style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.72rem" }}>
-                    {vlog.date}
-                  </small>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

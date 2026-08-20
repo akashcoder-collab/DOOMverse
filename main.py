@@ -9,8 +9,10 @@ load_dotenv()
 
 import os
 import asyncio
+import uuid
+import io
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 
@@ -174,12 +176,16 @@ async def get_user_vlogs(author_email):
                         if len(parts) >= 5:
                             stored_author = parts[4].strip().lower()
                             if stored_author == author_email.strip().lower():
+                                img_url = parts[5].strip() if len(parts) >= 6 else ""
+                                if not img_url and message.media:
+                                    img_url = f"/media/{message.id}"
                                 vlogs.append({
                                     "id": message.id,
                                     "title": parts[1].strip(),
                                     "videoUrl": parts[2].strip(),
                                     "description": parts[3].strip(),
                                     "author": parts[4].strip(),
+                                    "imageUrl": img_url,
                                     "date": str(message.date.strftime("%Y-%m-%d %H:%M")) if message.date else ""
                                 })
                 return vlogs
@@ -276,7 +282,7 @@ def load_chat():
 
 # ─── Edit Vlog in Telegram ───────────────────────────────────────────────────
 
-async def edit_vlog_in_telegram(message_id, title, video_url, description, author):
+async def edit_vlog_in_telegram(message_id, title, video_url, description, author, image_url="", file_path=None):
     async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         for dialog in dialogs:
@@ -284,28 +290,55 @@ async def edit_vlog_in_telegram(message_id, title, video_url, description, autho
                 # Get the specific message by ID
                 msg = await client.get_messages(dialog.id, ids=message_id)
                 if msg:
-                    new_text = f"VLOG|{title}|{video_url}|{description}|{author}"
-                    await msg.edit(new_text)
+                    new_text = f"VLOG|{title}|{video_url}|{description}|{author}|{image_url}"
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            await msg.edit(text=new_text, file=file_path)
+                        except Exception:
+                            await msg.edit(new_text)
+                    else:
+                        await msg.edit(new_text)
                     return True
         return False
 
 
-@app.route("/vlogs/edit", methods=["PUT"])
+@app.route("/vlogs/edit", methods=["PUT", "POST"])
 def edit_vlog():
-    data = request.get_json(silent=True) or {}
-    msg_id      = data.get("id")
-    title       = data.get("title", "").strip()
-    video_url   = data.get("videoUrl", "").strip()
-    description = data.get("description", "").strip()
-    author      = data.get("author", "").strip()
+    if request.content_type and "multipart/form-data" in request.content_type:
+        msg_id      = request.form.get("id")
+        title       = (request.form.get("title") or "").strip()
+        video_url   = (request.form.get("videoUrl") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        author      = (request.form.get("author") or "").strip()
+        image_url   = (request.form.get("imageUrl") or "").strip()
 
-    if not all([msg_id, title, video_url, author]):
-        return jsonify({"message": "Missing required fields."}), 400
+        file_path = None
+        image_file = request.files.get("image")
+        if image_file and image_file.filename:
+            uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+            os.makedirs(uploads_dir, exist_ok=True)
+            ext = os.path.splitext(image_file.filename)[1].lower() or ".jpg"
+            unique_filename = f"vlog_{int(__import__('time').time())}_{uuid.uuid4().hex[:8]}{ext}"
+            file_path = os.path.join(uploads_dir, unique_filename)
+            image_file.save(file_path)
+            image_url = f"/uploads/{unique_filename}"
+    else:
+        data = request.get_json(silent=True) or {}
+        msg_id      = data.get("id")
+        title       = (data.get("title") or "").strip()
+        video_url   = (data.get("videoUrl") or "").strip()
+        description = (data.get("description") or "").strip()
+        author      = (data.get("author") or "").strip()
+        image_url   = (data.get("imageUrl") or "").strip()
+        file_path   = None
+
+    if not msg_id or not title:
+        return jsonify({"message": "Vlog ID and Title are required."}), 400
 
     try:
-        result = run_async(edit_vlog_in_telegram(int(msg_id), title, video_url, description, author))
+        result = run_async(edit_vlog_in_telegram(int(msg_id), title, video_url, description, author, image_url, file_path))
         if result:
-            return jsonify({"message": "Vlog updated successfully."}), 200
+            return jsonify({"message": "Vlog updated successfully.", "imageUrl": image_url}), 200
         else:
             return jsonify({"message": "Vlog not found."}), 404
     except Exception as e:
@@ -677,24 +710,31 @@ async def get_telegram_vlogs():
                     if message.text and message.text.startswith("VLOG|"):
                         parts = message.text.split("|")
                         if len(parts) >= 5:
+                            img_url = parts[5].strip() if len(parts) >= 6 else ""
+                            if not img_url and message.media:
+                                img_url = f"/media/{message.id}"
                             vlogs.append({
                                 "id": message.id,
                                 "title": parts[1].strip(),
                                 "videoUrl": parts[2].strip(),
                                 "description": parts[3].strip(),
                                 "author": parts[4].strip(),
+                                "imageUrl": img_url,
                                 "date": str(message.date.strftime("%Y-%m-%d %H:%M")) if message.date else ""
                             })
                 return vlogs
         return []
 
-async def add_telegram_vlog(title, video_url, description, author):
+async def add_telegram_vlog(title, video_url, description, author, image_url="", file_path=None):
     async with get_telegram_client() as client:
         dialogs = await client.get_dialogs()
         for dialog in dialogs:
             if dialog.name == "Database":
-                message_text = f"VLOG|{title}|{video_url}|{description}|{author}"
-                await client.send_message(dialog.id, message_text)
+                message_text = f"VLOG|{title}|{video_url}|{description}|{author}|{image_url}"
+                if file_path and os.path.exists(file_path):
+                    await client.send_file(dialog.id, file=file_path, caption=message_text)
+                else:
+                    await client.send_message(dialog.id, message_text)
                 return True
         return False
 
@@ -710,23 +750,76 @@ def fetch_vlogs():
 
 @app.route("/vlogs", methods=["POST"])
 def post_vlog():
-    data = request.get_json(silent=True) or {}
-    title = data.get("title")
-    video_url = data.get("videoUrl")
-    description = data.get("description", "")
-    author = data.get("author", "Anonymous")
+    if request.content_type and "multipart/form-data" in request.content_type:
+        title = (request.form.get("title") or "").strip()
+        video_url = (request.form.get("videoUrl") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        author = (request.form.get("author") or "Anonymous").strip()
+        image_url = (request.form.get("imageUrl") or "").strip()
+        
+        file_path = None
+        image_file = request.files.get("image")
+        if image_file and image_file.filename:
+            uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+            os.makedirs(uploads_dir, exist_ok=True)
+            ext = os.path.splitext(image_file.filename)[1].lower() or ".jpg"
+            unique_filename = f"vlog_{int(__import__('time').time())}_{uuid.uuid4().hex[:8]}{ext}"
+            file_path = os.path.join(uploads_dir, unique_filename)
+            image_file.save(file_path)
+            if not image_url:
+                image_url = f"/uploads/{unique_filename}"
+    else:
+        data = request.get_json(silent=True) or {}
+        title = (data.get("title") or "").strip()
+        video_url = (data.get("videoUrl") or "").strip()
+        description = (data.get("description") or "").strip()
+        author = (data.get("author") or "Anonymous").strip()
+        image_url = (data.get("imageUrl") or "").strip()
+        file_path = None
 
-    if not title or not video_url:
-        return jsonify({"message": "Title and Video URL are required."}), 400
+    if not title:
+        return jsonify({"message": "Vlog Title is required."}), 400
 
     try:
-        success = run_async(add_telegram_vlog(title, video_url, description, author))
+        success = run_async(add_telegram_vlog(title, video_url, description, author, image_url, file_path))
         if success:
-            return jsonify({"message": "Vlog posted to Telegram successfully!"}), 201
+            return jsonify({"message": "Vlog posted to Telegram successfully!", "imageUrl": image_url}), 201
         return jsonify({"message": "Database chat not found."}), 404
     except Exception as e:
         print("Post vlog error:", e)
         return jsonify({"message": "Failed to post vlog", "error": str(e)}), 500
+
+@app.route("/uploads/<path:filename>", methods=["GET"])
+def serve_uploaded_file(filename):
+    uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+    return send_from_directory(uploads_dir, filename)
+
+@app.route("/media/<int:msg_id>", methods=["GET"])
+def get_telegram_media(msg_id):
+    uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    cached_file = os.path.join(uploads_dir, f"media_{msg_id}.jpg")
+    if os.path.exists(cached_file):
+        return send_from_directory(uploads_dir, f"media_{msg_id}.jpg")
+    
+    async def download():
+        async with get_telegram_client() as client:
+            dialogs = await client.get_dialogs()
+            for dialog in dialogs:
+                if dialog.name == "Database":
+                    msg = await client.get_messages(dialog.id, ids=msg_id)
+                    if msg and msg.media:
+                        await client.download_media(msg, file=cached_file)
+                        return True
+            return False
+    
+    try:
+        found = run_async(download())
+        if found and os.path.exists(cached_file):
+            return send_from_directory(uploads_dir, f"media_{msg_id}.jpg")
+        return jsonify({"message": "Media not found"}), 404
+    except Exception as e:
+        return jsonify({"message": "Failed to download media", "error": str(e)}), 500
 
 # ─── Movie Information & Details Endpoints (TMDB & Curated Data) ──────────
 
