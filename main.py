@@ -698,6 +698,36 @@ async def add_telegram_vlog(title, video_url, description, author):
                 return True
         return False
 
+# --- FLASK VLOG ROUTES ---
+@app.route("/vlogs", methods=["GET"])
+def fetch_vlogs():
+    try:
+        vlogs = run_async(get_telegram_vlogs())
+        return jsonify({"vlogs": vlogs}), 200
+    except Exception as e:
+        print("Fetch vlogs error:", e)
+        return jsonify({"message": "Failed to fetch vlogs", "error": str(e)}), 500
+
+@app.route("/vlogs", methods=["POST"])
+def post_vlog():
+    data = request.get_json(silent=True) or {}
+    title = data.get("title")
+    video_url = data.get("videoUrl")
+    description = data.get("description", "")
+    author = data.get("author", "Anonymous")
+
+    if not title or not video_url:
+        return jsonify({"message": "Title and Video URL are required."}), 400
+
+    try:
+        success = run_async(add_telegram_vlog(title, video_url, description, author))
+        if success:
+            return jsonify({"message": "Vlog posted to Telegram successfully!"}), 201
+        return jsonify({"message": "Database chat not found."}), 404
+    except Exception as e:
+        print("Post vlog error:", e)
+        return jsonify({"message": "Failed to post vlog", "error": str(e)}), 500
+
 # ─── Movie Information & Details Endpoints (TMDB & Curated Data) ──────────
 
 TMDB_API_KEY = (os.environ.get("TMDB_API_KEY") or "").strip()
