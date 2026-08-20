@@ -28,7 +28,7 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 def groq_chat(model, messages, max_tokens=512, temperature=0.7):
     """Call Groq API directly via HTTP requests instead of the SDK."""
-    key = os.environ.get("GROQ_API_KEY", GROQ_API_KEY)
+    key = (os.environ.get("GROQ_API_KEY") or GROQ_API_KEY or "").strip()
     if not key:
         return None, "GROQ_API_KEY is missing"
     
