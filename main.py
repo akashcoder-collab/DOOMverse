@@ -1,4 +1,5 @@
 from groq import Groq
+import traceback
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
@@ -54,6 +55,10 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 
+# Models to try in order of preference
+GROQ_MODELS = ["openai/gpt-oss-20b", "qwen/qwen3.6-27b", "openai/gpt-oss-safeguard-20b"]
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(silent=True) or {}
@@ -63,39 +68,79 @@ def chat():
     if not user_message:
         return jsonify({"reply": "Please send a message."}), 400
 
-    try:
-        client = get_groq_client()
-        if not client:
-            return jsonify({"reply": "AI is not configured. GROQ_API_KEY is missing."}), 500
+    client = get_groq_client()
+    if not client:
+        print("CHAT ERROR: No Groq client — GROQ_API_KEY is missing or empty")
+        return jsonify({"reply": "AI is not configured. GROQ_API_KEY is missing."}), 500
 
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        f"You are a helpful AI assistant on DOOMverse, a video vlog platform. "
-                        f"The user is currently watching: {video_context}. "
-                        "Answer questions helpfully and concisely. Keep replies under 3 sentences unless more detail is needed."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": user_message,
-                },
-            ],
-            max_tokens=512,
-            temperature=0.7,
-        )
-        reply = response.choices[0].message.content
-        # Clean up any thinking tags from model output
-        import re
-        reply = re.sub(r'<think>.*?</think>', '', reply, flags=re.DOTALL).strip()
-        return jsonify({"reply": reply}), 200
+    messages_payload = [
+        {
+            "role": "system",
+            "content": (
+                f"You are a helpful AI assistant on DOOMverse, a video vlog platform. "
+                f"The user is currently watching: {video_context}. "
+                "Answer questions helpfully and concisely. Keep replies under 3 sentences unless more detail is needed."
+            ),
+        },
+        {
+            "role": "user",
+            "content": user_message,
+        },
+    ]
 
-    except Exception as e:
-        print(f"Groq error [{type(e).__name__}]: {e}")
-        return jsonify({"reply": "AI is unavailable right now. Please try again."}), 500
+    last_error = None
+    for model in GROQ_MODELS:
+        try:
+            print(f"CHAT: Trying model '{model}' ...")
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages_payload,
+                max_tokens=512,
+                temperature=0.7,
+            )
+            reply = response.choices[0].message.content
+            # Clean up any thinking tags from model output
+            import re
+            reply = re.sub(r'<think>.*?</think>', '', reply, flags=re.DOTALL).strip()
+            if reply:
+                print(f"CHAT: Success with model '{model}'")
+                return jsonify({"reply": reply}), 200
+        except Exception as e:
+            last_error = e
+            print(f"CHAT ERROR with model '{model}' [{type(e).__name__}]: {e}")
+            print(traceback.format_exc())
+            continue
+
+    err_msg = str(last_error) if last_error else "Unknown error"
+    print(f"CHAT: All models failed. Last error: {err_msg}")
+    return jsonify({"reply": f"AI is unavailable right now. Please try again. (Error: {err_msg})"}), 500
+
+
+@app.route("/test-ai", methods=["GET"])
+def test_ai():
+    """Diagnostic endpoint to verify Groq AI is working."""
+    client = get_groq_client()
+    if not client:
+        return jsonify({"status": "error", "message": "No Groq client — GROQ_API_KEY missing"}), 500
+
+    results = {}
+    for model in GROQ_MODELS:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "Say hi in one word"}],
+                max_tokens=10,
+                temperature=0,
+            )
+            reply = response.choices[0].message.content
+            import re
+            reply = re.sub(r'<think>.*?</think>', '', reply, flags=re.DOTALL).strip()
+            results[model] = {"status": "ok", "reply": reply}
+        except Exception as e:
+            results[model] = {"status": "error", "error": f"{type(e).__name__}: {e}"}
+
+    all_ok = any(r["status"] == "ok" for r in results.values())
+    return jsonify({"status": "ok" if all_ok else "all_failed", "models": results}), (200 if all_ok else 500)
 
 
 @app.route("/debug", methods=["GET"])
