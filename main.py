@@ -1,5 +1,6 @@
-from groq import Groq
+import requests as http_requests
 import traceback
+import re
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from dotenv import load_dotenv
@@ -23,15 +24,32 @@ TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "ae2a595d3188c7a52dbea0e
 TELEGRAM_SESSION_STRING = os.environ.get("TELEGRAM_SESSION_STRING")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-_groq_client = None
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-def get_groq_client():
-    """Lazy-init Groq client so it always picks up the current env var."""
-    global _groq_client
+def groq_chat(model, messages, max_tokens=512, temperature=0.7):
+    """Call Groq API directly via HTTP requests instead of the SDK."""
     key = os.environ.get("GROQ_API_KEY", GROQ_API_KEY)
-    if _groq_client is None and key:
-        _groq_client = Groq(api_key=key)
-    return _groq_client
+    if not key:
+        return None, "GROQ_API_KEY is missing"
+    
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    
+    resp = http_requests.post(GROQ_API_URL, json=payload, headers=headers, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    reply = data["choices"][0]["message"]["content"]
+    # Clean up any thinking tags from model output
+    reply = re.sub(r'<think>.*?</think>', '', reply, flags=re.DOTALL).strip()
+    return reply, None
 
 def get_telegram_client():
     if TELEGRAM_SESSION_STRING:
@@ -68,9 +86,9 @@ def chat():
     if not user_message:
         return jsonify({"reply": "Please send a message."}), 400
 
-    client = get_groq_client()
-    if not client:
-        print("CHAT ERROR: No Groq client — GROQ_API_KEY is missing or empty")
+    key = os.environ.get("GROQ_API_KEY", GROQ_API_KEY)
+    if not key:
+        print("CHAT ERROR: GROQ_API_KEY is missing or empty")
         return jsonify({"reply": "AI is not configured. GROQ_API_KEY is missing."}), 500
 
     messages_payload = [
@@ -92,16 +110,9 @@ def chat():
     for model in GROQ_MODELS:
         try:
             print(f"CHAT: Trying model '{model}' ...")
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages_payload,
-                max_tokens=512,
-                temperature=0.7,
-            )
-            reply = response.choices[0].message.content
-            # Clean up any thinking tags from model output
-            import re
-            reply = re.sub(r'<think>.*?</think>', '', reply, flags=re.DOTALL).strip()
+            reply, err = groq_chat(model, messages_payload, max_tokens=512, temperature=0.7)
+            if err:
+                raise Exception(err)
             if reply:
                 print(f"CHAT: Success with model '{model}'")
                 return jsonify({"reply": reply}), 200
@@ -119,22 +130,16 @@ def chat():
 @app.route("/test-ai", methods=["GET"])
 def test_ai():
     """Diagnostic endpoint to verify Groq AI is working."""
-    client = get_groq_client()
-    if not client:
-        return jsonify({"status": "error", "message": "No Groq client — GROQ_API_KEY missing"}), 500
+    key = os.environ.get("GROQ_API_KEY", GROQ_API_KEY)
+    if not key:
+        return jsonify({"status": "error", "message": "GROQ_API_KEY missing"}), 500
 
     results = {}
     for model in GROQ_MODELS:
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": "Say hi in one word"}],
-                max_tokens=10,
-                temperature=0,
-            )
-            reply = response.choices[0].message.content
-            import re
-            reply = re.sub(r'<think>.*?</think>', '', reply, flags=re.DOTALL).strip()
+            reply, err = groq_chat(model, [{"role": "user", "content": "Say hi in one word"}], max_tokens=10, temperature=0)
+            if err:
+                raise Exception(err)
             results[model] = {"status": "ok", "reply": reply}
         except Exception as e:
             results[model] = {"status": "error", "error": f"{type(e).__name__}: {e}"}
