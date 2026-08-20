@@ -74,8 +74,8 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 
-# Models to try in order of preference (qwen first — openai models tend to use all tokens on thinking)
-GROQ_MODELS = ["qwen/qwen3.6-27b", "openai/gpt-oss-20b", "openai/gpt-oss-safeguard-20b"]
+# Models to try in order of preference
+GROQ_MODELS = ["openai/gpt-oss-20b", "openai/gpt-oss-safeguard-20b", "qwen/qwen3.6-27b"]
 
 
 @app.route("/chat", methods=["POST"])
