@@ -582,119 +582,87 @@ def health_check():
 
 
 async def telegram_login(email, password):
+    email = (email or "").strip().lower()
+    password = (password or "").strip()
 
     async with get_telegram_client() as client:
-
-        print("Telegram connected")
-
         dialogs = await client.get_dialogs()
 
-        print("Number of dialogs:", len(dialogs))
-
         for dialog in dialogs:
+            if dialog.name and dialog.name.strip().lower() == "database":
+                found_account = False
+                stored_pwd = None
 
-            print("Dialog:", dialog.name, "| ID:", dialog.id)
-
-            if dialog.name == "Database":
-
-                print("Database chat found!")
-
-                found = False
-
-                async for message in client.iter_messages(
-                    dialog.id,
-                    limit=None
-                ):
-
-                    if message.text is None:
+                async for message in client.iter_messages(dialog.id, limit=None):
+                    text = message.text or ""
+                    if not text:
                         continue
 
-                    print("Database message:", message.text)
-
-                    parts = message.text.split("/")
-
-                    if len(parts) < 2:
-                        continue
-
-                    stored_email = parts[0].strip()
-                    stored_password = parts[-1].strip()
-
+                    # Filter out non-user-credential records
                     if (
-                        email == stored_email
-                        and password == stored_password
+                        text.startswith("VLOG|")
+                        or text.startswith("CHAT|")
+                        or text.startswith("PROFILE|")
+                        or text.startswith("ACTIVITY|")
                     ):
+                        continue
 
-                        print("Credentials already exist")
-                        found = True
-                        break
+                    if "/" in text:
+                        parts = text.split("/", 1)
+                        stored_email = parts[0].strip().lower()
 
-                if not found:
+                        if stored_email == email:
+                            found_account = True
+                            stored_pwd = parts[1].strip() if len(parts) > 1 else ""
+                            break
 
-                    print("Credentials not found")
-                    print("Creating:", email)
-
-                    await client.send_message(
-                        dialog.id,
-                        f"{email}/{password}"
-                    )
-
-                    print("Credentials sent to Database")
-
+                if not found_account:
+                    # New user registering
+                    await client.send_message(dialog.id, f"{email}/{password}")
                     return "id is created"
 
-                return "you are loggined"
-
-        print("Database chat was NOT found")
+                if stored_pwd == password:
+                    return "you are loggined"
+                else:
+                    return "incorrect password"
 
         return "Database not found"
 
 
 @app.route("/login", methods=["POST"])
 def login():
-
     data = request.get_json(silent=True) or {}
-
-    email = data.get("email")
-    password = data.get("password")
+    email = (data.get("email") or "").strip().lower()
+    password = (data.get("password") or "").strip()
 
     if not email or not password:
-
-        return jsonify({
-            "message": "Email and password are required."
-        }), 400
+        return jsonify({"message": "Email and password are required."}), 400
 
     try:
-
-        result = run_async(
-            telegram_login(email, password)
-        )
+        result = run_async(telegram_login(email, password))
 
         if result == "you are loggined":
-
-            return jsonify({
-                "message": "Login successful."
-            }), 200
+            return jsonify({"message": "Login successful.", "email": email}), 200
 
         elif result == "id is created":
+            return jsonify({"message": "Account created and logged in successfully!", "email": email}), 201
 
-            return jsonify({
-                "message": "ID is created."
-            }), 201
+        elif result == "incorrect password":
+            return jsonify({"message": "Incorrect password for this account. Please check and try again."}), 401
+
+        elif result == "Database not found":
+            return jsonify({"message": "Telegram Database chat was not found in session."}), 503
 
         else:
-
-            return jsonify({
-                "message": result
-            }), 404
+            return jsonify({"message": result}), 400
 
     except Exception as e:
-
-        print("ERROR:", e)
-
+        print("LOGIN ERROR:", e)
+        traceback.print_exc()
         return jsonify({
-            "message": "Unable to process request.",
+            "message": "Unable to connect to Telegram database.",
             "error": str(e)
-        }), 502
+        }), 500
 
 import json
 

@@ -10,14 +10,27 @@ import MoviesTab from "./movies/MoviesTab";
 
 
 function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem("doomverse_user");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
+    try {
+      localStorage.setItem("doomverse_user", JSON.stringify(userData));
+    } catch {}
   };
 
   const handleLogout = () => {
     setUser(null);
+    try {
+      localStorage.removeItem("doomverse_user");
+    } catch {}
   };
 
   return (
