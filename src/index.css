@@ -29,22 +29,35 @@ code {
   .watch-split-container {
     flex-direction: column !important;
     height: auto !important;
+    min-height: 100vh !important;
     overflow-y: auto !important;
   }
 
   .watch-split-left {
-    flex: 1 1 100% !important;
+    flex: 0 0 auto !important;
     width: 100% !important;
-    height: 280px !important;
-    min-height: 280px !important;
+    /* 16:9 aspect ratio based on viewport width */
+    height: 56.25vw !important;
+    min-height: 220px !important;
+    max-height: 360px !important;
   }
 
   .watch-split-right {
-    flex: 1 1 100% !important;
+    flex: 1 1 auto !important;
     width: 100% !important;
-    height: 450px !important;
+    /* Fill remaining space below the video */
+    min-height: 350px !important;
+    height: calc(100vh - 56.25vw - 57px) !important;
+    max-height: none !important;
     border-left: none !important;
     border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+  }
+
+  /* Make chat input touch-friendly on mobile */
+  .watch-split-right input[type="text"],
+  .watch-split-right button {
+    font-size: 16px !important; /* Prevents iOS zoom on focus */
+    min-height: 44px !important; /* Apple's minimum touch target */
   }
 
   .account-split-container {
@@ -70,6 +83,19 @@ code {
     align-items: flex-start !important;
     gap: 12px !important;
     margin-top: 12px !important;
+  }
+}
+
+/* Extra small phones */
+@media (max-width: 400px) {
+  .watch-split-left {
+    min-height: 200px !important;
+    height: 56.25vw !important;
+  }
+
+  .watch-split-right {
+    min-height: 300px !important;
+    height: calc(100vh - 56.25vw - 50px) !important;
   }
 }
 

@@ -46,7 +46,7 @@ export default function WatchPage({ vlog, user, onBack }) {
 
   // Get YouTube embed URL
   const getEmbedUrl = (url) => {
-    const params = "?autoplay=1&mute=1&rel=0&modestbranding=1";
+    const params = "?rel=0&modestbranding=1&playsinline=1";
     try {
       if (url.includes("youtu.be/")) {
         const id = url.split("youtu.be/")[1].split("?")[0];
@@ -189,8 +189,9 @@ export default function WatchPage({ vlog, user, onBack }) {
             src={getEmbedUrl(vlog.videoUrl)}
             title={vlog.title}
             style={{ width: "100%", height: "100%", border: "none" }}
-            allow="accelerometer; autoplay; muted; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
+            playsInline
           ></iframe>
         </div>
 
